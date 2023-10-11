@@ -2,12 +2,15 @@
 // You should copy it to another filename to avoid overwriting it.
 
 #include "gen-cpp/HelloSvc.h"
+
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/server/TSimpleServer.h>
 #include <thrift/transport/TServerSocket.h>
 #include <thrift/transport/TBufferTransports.h>
 
 #include <iostream>
+#include <signal.h>
+#include <sys/sem.h>
 #include <sys/shm.h>
 
 using namespace ::apache::thrift;
@@ -15,69 +18,146 @@ using namespace ::apache::thrift::protocol;
 using namespace ::apache::thrift::transport;
 using namespace ::apache::thrift::server;
 
-class HelloSvcHandler : virtual public HelloSvcIf {
-public:
-    HelloSvcHandler() {
-        std::cout << "Starting server..." << std::endl;
-    }
+#define SEMKEYPATH "/dev/null"
+#define SEMKEYID 1
 
-    void hello(std::string& _return, const std::string& msg) {
-        _return = "Hello, " + msg + "\n";
-    }
-};
+#define NUMSEMS 2
+#define NUMMSG 4
 
 int main(int argc, char **argv) {
-//    int port = 9090;
-//    std::shared_ptr<HelloSvcHandler> handler(new HelloSvcHandler());
-//    std::shared_ptr<TProcessor> processor(new HelloSvcProcessor(handler));
-//    std::shared_ptr<TServerTransport> serverTransport(new TServerSocket(port));
-//    std::shared_ptr<TTransportFactory> transportFactory(new TBufferedTransportFactory());
-//    std::shared_ptr<TProtocolFactory> protocolFactory(new TBinaryProtocolFactory());
-//
-//    TSimpleServer server(processor, serverTransport, transportFactory, protocolFactory);
-//    server.serve();
-    uint32_t sz = 1024;
+    // SEMAPHORE INTIALIZATIONS
+    int semid, rc;
+    key_t semkey;
+    struct sembuf operations[2];
+    short sarray[NUMSEMS];
+
+    semkey = ftok(SEMKEYPATH, SEMKEYID);
+    std::cout << "Semaphore key: " << std::hex << semkey << std::endl;
+    if (semkey == (key_t) -1) {
+        std::cout << "main: ftok() for sem failed" << std::endl;
+        return -1;
+    }
+
+    // server initializes semaphores, not client
+    semid = semget(semkey, NUMSEMS, 0666 | IPC_CREAT | IPC_EXCL);
+    if (semid == -1) {
+        std::cout << "main: semget() failed" << std::endl;
+        perror("semget");
+        return -1;
+    }
+
+    // first semaphore definitions:
+    //     1 = shmem being used
+    //     0 = shmem is free
+    // second semaphore definitions:
+    //     1 = shmem changed by client
+    //     0 = shmem not changed by client
+    sarray[0] = 0;
+    sarray[1] = 0;
+
+    rc = semctl(semid, 1, SETALL, sarray);
+    if (rc == -1) {
+        std::cout << "main: semctl() initialization failed" << std::endl;
+    }
+
+    // ========
+    uint32_t sz = 10;
     char *shm;
 
     std::shared_ptr<TMemoryBuffer> transport(new TMemoryBuffer(sz));
     std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
 
     uint8_t *pbuf = (uint8_t *) malloc(sizeof *pbuf * sz);
-    Message *msg = new Message();
 
     key_t key = 5678;
     int shmid;
 
-    if ((shmid = shmget(key, sz, 0666)) < 0) {
+    if ((shmid = shmget(key, sz, 0666 | IPC_CREAT | IPC_EXCL)) < 0) {
         perror("shmget");
         exit(1);
     }
+
+    std::cout << "Shm id: " << shmid << std::endl;
 
     if ((shm = (char *) shmat(shmid, 0, 0)) == (char *) -1) {
         perror("shmat");
         exit(1);
     }
 
-    memcpy(pbuf, shm, sz);
-    std::cout << "Copied shmem to pbuf" << std::endl;
-    transport->write(pbuf, sz);
-    msg->read(protocol.get());
-    msg->printTo(std::cout);
-    std::cout << std::endl;
+    std::cout << "Ready for client jobs" << std::endl;
+
+    while (true) {
+//    for (int i = 0; i < NUMMSG; ++i) {
+        // operate on 2nd sem
+        operations[0].sem_num = 1;
+        // decrement semval by 1, implying that client msg has been processed,
+        // so client can continue to send msgs
+        operations[0].sem_op = -1;
+        // allow for wait
+        operations[0].sem_flg = 0;
+
+        // operate on 1st sem
+        operations[1].sem_num = 0;
+        // increment semval by 1, implying that shmem being used (by server)
+        operations[1].sem_op = 1;
+        // don't allow for wait, and i believe waiting unnecessary because
+        // server is not writing to shmem
+        operations[1].sem_flg = IPC_NOWAIT;
+
+        rc = semop(semid, operations, 2);
+        if (rc == -1) {
+            std::cout << "main: semop() failed" << std::endl;
+        }
+
+        // do server work on shmem
+        // shm will contain serialized data of message
+        memcpy(pbuf, shm, sz);
+        std::cout << "Copied shmem to pbuf" << std::endl;
+        // deserialize data
+        transport->write(pbuf, sz);
+        std::string msg;
+        protocol->readString(msg);
+        // necessary for restarting rBase and wBase, so that protocol reads
+        // and writes start from beginning every time
+        transport->resetBuffer();
+
+        // * is the break string
+        if (msg == "*") {
+            break;
+        }
+
+        std::cout << "Hello, " << msg << std::endl;
+
+        // signal first sem to free shmem
+        operations[0].sem_num = 0;
+        operations[0].sem_op = -1;
+        operations[0].sem_flg = IPC_NOWAIT;
+
+        rc = semop(semid, operations, 1);
+        if (rc == -1) {
+            std::cout << "main: semop() failed" << std::endl;
+            return -1;
+        }
+    }
 
     free(pbuf);
 
-    if ((shmctl(shmid, IPC_RMID, (struct shmid_ds *) 0)) == -1) {
-        perror("shmctl");
-        exit(1);
+    // free semaphores
+    rc = semctl(semid, 1, IPC_RMID);
+    if (rc == -1) {
+        std::cout << "main: semctl() remove id failed" << std::endl;
     }
 
+    // free shmem
     if (shmdt(shm) == -1) {
         perror("shmdt");
         exit(1);
     }
 
-    std::cout << "Detached from shmem" << std::endl;
+    if ((shmctl(shmid, IPC_RMID, (struct shmid_ds *) 0)) == -1) {
+        perror("shmctl");
+        exit(1);
+    }
 
     return 0;
 }
