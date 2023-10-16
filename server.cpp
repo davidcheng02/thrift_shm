@@ -23,12 +23,12 @@ int main(int argc, char **argv) {
     uint8_t *pbuf = (uint8_t *) malloc(sizeof *pbuf * SHMSZ);
 
     try {
-        Buffer buf = Buffer(false);
+        Buffer request_buf = Buffer(false, 1, 1);
 
         while (true) {
             // do server work on shmem
             // shm will contain serialized data of message
-            char *shm = buf.processShm();
+            char *shm = request_buf.processShm();
             memcpy(pbuf, shm, SHMSZ);
             std::cout << "Copied shmem to pbuf" << std::endl;
             // deserialize data
@@ -39,18 +39,32 @@ int main(int argc, char **argv) {
             // and writes start from beginning every time
             transport->resetBuffer();
 
+            request_buf.processShmRelease();
+
+            // send response to client
+            uint8_t *mem_buf;
+            uint32_t mem_buf_sz;
+            std::string response = "Hello, " + msg;
+            protocol->writeString(response);
+            // now pbuf points to TMemoryBuffer's memory
+            transport->getBuffer(&mem_buf, &mem_buf_sz);
+            transport->resetBuffer();
+
+            Buffer response_buf = Buffer(true, 2, 2);
+            shm = response_buf.putShm();
+            memcpy(shm, mem_buf, SHMSZ);
+
+            response_buf.putShmRelease();
+            response_buf.detachShm();
+
             // * is the break string
             if (msg == "*") {
                 break;
             }
-
-            std::cout << "Hello, " << msg << std::endl;
-
-            buf.processShmRelease();
         }
 
         free(pbuf);
-        buf.freeShm();
+        request_buf.freeShm();
     } catch (char const *e) {
         std::cout << e << std::endl;
         return 1;

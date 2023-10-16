@@ -18,7 +18,8 @@ using namespace apache::thrift::transport;
 
 int main() {
     try {
-        Buffer buf = Buffer(true);
+        Buffer request_buf = Buffer(true, 1, 1);
+        Buffer response_buf = Buffer(false, 2, 2);
 
         std::shared_ptr<TMemoryBuffer> transport(new TMemoryBuffer(SHMSZ));
         std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
@@ -35,17 +36,31 @@ int main() {
         uint8_t *pbuf;
         uint32_t pbuf_sz;
         transport->getBuffer(&pbuf, &pbuf_sz);
+        transport->resetBuffer();
 
-        char *shm = buf.putShm();
+        char *shm = request_buf.putShm();
 
         // CLIENT WORK
         // copy serialized data into shared memory
         memcpy(shm, pbuf, SHMSZ);
         std::cout << "Copied serialized data to shmem" << std::endl;
 
-        buf.putShmRelease();
+        request_buf.putShmRelease();
+        request_buf.detachShm();
 
-        buf.detachShm();
+        // get response from server and output
+        shm = response_buf.processShm();
+        pbuf = (uint8_t *) malloc(sizeof *pbuf * SHMSZ);
+
+        memcpy(pbuf, shm, SHMSZ);
+        transport->write(pbuf, SHMSZ);
+        std::string response;
+        protocol->readString(response);
+        std::cout << "Response from server: " << response << std::endl;
+
+        free(pbuf);
+        response_buf.processShmRelease();
+        response_buf.freeShm();
     } catch (char const *e) {
         std::cout << e << std::endl;
         return 1;

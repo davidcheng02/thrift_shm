@@ -1,8 +1,8 @@
 #include "buffer.h"
 
-Buffer::Buffer(bool exists) {
+Buffer::Buffer(bool exists, int semkeyid, int shmkeyid) {
     // set up NUMSEM semaphores
-    semkey = ftok(SEMKEYPATH, SEMKEYID);
+    semkey = ftok(SEMKEYPATH, semkeyid);
     if (semkey == (key_t) -1) {
         throw "ftok() for sem failed";
     }
@@ -35,11 +35,12 @@ Buffer::Buffer(bool exists) {
         throw "semctl() initialization failed";
     }
 
+    int shmkey = ftok(SHMKEYPATH, shmkeyid);
     // set up shmem
     if (exists) {
-        shmid = shmget(SHMKEY, SHMSZ, 0666);
+        shmid = shmget(shmkey, SHMSZ, 0666);
     } else {
-        shmid = shmget(SHMKEY, SHMSZ, 0666 | IPC_CREAT | IPC_EXCL);
+        shmid = shmget(shmkey, SHMSZ, 0666 | IPC_CREAT | IPC_EXCL);
     }
 
     if (shmid < 0) {
