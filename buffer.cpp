@@ -7,10 +7,14 @@ Buffer::Buffer(bool exists, int semkeyid, int shmkeyid) {
         throw "ftok() for sem failed";
     }
 
-    std::cout << "Sem key: " << std::hex << semkey << std::endl;
+//    std::cout << "Sem key: " << std::hex << semkey << std::endl;
 
     if (exists) {
         semid = semget(semkey, NUMSEMS, 0666);
+        // keep on trying to get sem if not found
+        while (semid == -1) {
+            semid = semget(semkey, NUMSEMS, 0666);
+        }
     } else {
         semid = semget(semkey, NUMSEMS, 0666 | IPC_CREAT | IPC_EXCL);
     }
@@ -19,7 +23,7 @@ Buffer::Buffer(bool exists, int semkeyid, int shmkeyid) {
         throw "semget() failed";
     }
 
-    std::cout << "Sem id: " << semid << std::endl;
+//    std::cout << "Sem id: " << semid << std::endl;
 
     // first semaphore definitions:
     //     1 = shmem being used
@@ -39,6 +43,9 @@ Buffer::Buffer(bool exists, int semkeyid, int shmkeyid) {
     // set up shmem
     if (exists) {
         shmid = shmget(shmkey, SHMSZ, 0666);
+        while (shmid == -1) {
+            shmid = shmget(shmkey, SHMSZ, 0666);
+        }
     } else {
         shmid = shmget(shmkey, SHMSZ, 0666 | IPC_CREAT | IPC_EXCL);
     }
@@ -47,9 +54,10 @@ Buffer::Buffer(bool exists, int semkeyid, int shmkeyid) {
         throw "shmget() failed";
     }
 
-    std::cout << "Shm id: " << shmid << std::endl;
+//    std::cout << "Shm id: " << shmid << std::endl;
 
     if ((shm = (char *) shmat(shmid, 0, 0)) == (char *) -1) {
+        perror("shmat");
         throw "shmat() failed";
     }
 }
@@ -137,7 +145,7 @@ void Buffer::detachShm() {
         throw "detachShm(): shmdt() failed";
     }
 
-    std::cout << "Detached from shm" << std::endl;
+//    std::cout << "Detached from shm" << std::endl;
 }
 
 void Buffer::freeShm() {

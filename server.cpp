@@ -17,6 +17,8 @@ using namespace ::apache::thrift::protocol;
 using namespace ::apache::thrift::transport;
 using namespace ::apache::thrift::server;
 
+#define NUMRUNS 100000
+
 int main(int argc, char **argv) {
     std::shared_ptr<TMemoryBuffer> transport(new TMemoryBuffer(SHMSZ));
     std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
@@ -24,13 +26,14 @@ int main(int argc, char **argv) {
 
     try {
         Buffer request_buf = Buffer(false, 1, 1);
+        Buffer response_buf = Buffer(true, 2, 2);
 
         while (true) {
             // do server work on shmem
             // shm will contain serialized data of message
             char *shm = request_buf.processShm();
             memcpy(pbuf, shm, SHMSZ);
-            std::cout << "Copied shmem to pbuf" << std::endl;
+//            std::cout << "Copied shmem to pbuf" << std::endl;
             // deserialize data
             transport->write(pbuf, SHMSZ);
             std::string msg;
@@ -42,20 +45,18 @@ int main(int argc, char **argv) {
             request_buf.processShmRelease();
 
             // send response to client
-            uint8_t *mem_buf;
-            uint32_t mem_buf_sz;
+            uint8_t *transport_buf;
+            uint32_t transport_buf_sz;
             std::string response = "Hello, " + msg;
             protocol->writeString(response);
             // now pbuf points to TMemoryBuffer's memory
-            transport->getBuffer(&mem_buf, &mem_buf_sz);
+            transport->getBuffer(&transport_buf, &transport_buf_sz);
             transport->resetBuffer();
 
-            Buffer response_buf = Buffer(true, 2, 2);
             shm = response_buf.putShm();
-            memcpy(shm, mem_buf, SHMSZ);
+            memcpy(shm, transport_buf, SHMSZ);
 
             response_buf.putShmRelease();
-            response_buf.detachShm();
 
             // * is the break string
             if (msg == "*") {
@@ -63,6 +64,8 @@ int main(int argc, char **argv) {
             }
         }
 
+        // shut down stuff, server responsible for freeing request_buf
+        response_buf.detachShm();
         free(pbuf);
         request_buf.freeShm();
     } catch (char const *e) {

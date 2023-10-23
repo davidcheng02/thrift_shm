@@ -8,6 +8,8 @@
 #include <thrift/transport/TBufferTransports.h>
 #include <thrift/transport/TTransportUtils.h>
 
+#include <cassert>
+#include <chrono>
 #include <iostream>
 #include <sys/sem.h>
 #include <sys/shm.h>
@@ -16,50 +18,87 @@ using namespace apache::thrift;
 using namespace apache::thrift::protocol;
 using namespace apache::thrift::transport;
 
+#define NUMRUNS 100000
+
+void echoMsg(Buffer request_buf,
+             Buffer response_buf,
+             std::shared_ptr<TMemoryBuffer> transport,
+             std::shared_ptr<TProtocol> protocol,
+             uint8_t *pbuf,
+             std::string msg) {
+    protocol->writeString(msg);
+
+    // buffer pointer and data size
+    uint8_t *transport_buf;
+    uint32_t transport_buf_sz;
+    transport->getBuffer(&transport_buf, &transport_buf_sz);
+    transport->resetBuffer();
+
+    char *shm = request_buf.putShm();
+
+    // CLIENT WORK
+    // copy serialized data into shared memory
+    memcpy(shm, transport_buf, SHMSZ);
+
+    request_buf.putShmRelease();
+
+    // get response from server and output
+    shm = response_buf.processShm();
+
+    memcpy(pbuf, shm, SHMSZ);
+    transport->write(pbuf, SHMSZ);
+    std::string response;
+    protocol->readString(response);
+
+    assert(response == "Hello, " + msg);
+    transport->resetBuffer();
+
+    response_buf.processShmRelease();
+}
+
 int main() {
+    std::shared_ptr<TMemoryBuffer> transport(new TMemoryBuffer(SHMSZ));
+    std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
+    uint8_t *pbuf = (uint8_t *) malloc(sizeof *pbuf * SHMSZ);
+    transport->open();
+
     try {
         Buffer request_buf = Buffer(true, 1, 1);
         Buffer response_buf = Buffer(false, 2, 2);
 
-        std::shared_ptr<TMemoryBuffer> transport(new TMemoryBuffer(SHMSZ));
-        std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
-        transport->open();
+        auto start = std::chrono::high_resolution_clock::now();
 
-        // Debugging using user input
-        std::string input;
-        std::cout << "Type a message: ";
-        std::cin >> input;
+        for (int i = 0; i < NUMRUNS; ++i) {
+            echoMsg(request_buf,
+                    response_buf,
+                    transport,
+                    protocol,
+                    pbuf,
+                    "World");
+        }
 
-        protocol->writeString(input);
+        auto stop = std::chrono::high_resolution_clock::now();
 
-        // buffer pointer and data size
-        uint8_t *pbuf;
-        uint32_t pbuf_sz;
-        transport->getBuffer(&pbuf, &pbuf_sz);
-        transport->resetBuffer();
+        typedef std::chrono::milliseconds ms;
+        typedef std::chrono::microseconds us;
+        typedef std::chrono::duration<float> fsec;
 
-        char *shm = request_buf.putShm();
+        fsec duration = stop - start;
 
-        // CLIENT WORK
-        // copy serialized data into shared memory
-        memcpy(shm, pbuf, SHMSZ);
-        std::cout << "Copied serialized data to shmem" << std::endl;
+        double throughput = NUMRUNS / duration.count();
+        us duration_us = std::chrono::duration_cast<us>(duration);
+        double latency = duration_us.count() / NUMRUNS;
 
-        request_buf.putShmRelease();
-        request_buf.detachShm();
+        std::cout << "Throughput: " << throughput << " req/s" << std::endl;
+        std::cout << "Latency: " << latency << " us" << std::endl;
+        std::cout << "Time: " << duration.count() << " s" << std::endl;
 
-        // get response from server and output
-        shm = response_buf.processShm();
-        pbuf = (uint8_t *) malloc(sizeof *pbuf * SHMSZ);
+        // send shutdown msg to server
+        echoMsg(request_buf, response_buf, transport, protocol, pbuf, "*");
 
-        memcpy(pbuf, shm, SHMSZ);
-        transport->write(pbuf, SHMSZ);
-        std::string response;
-        protocol->readString(response);
-        std::cout << "Response from server: " << response << std::endl;
-
+        // shut down stuff, client responsible for freeing response_buf
         free(pbuf);
-        response_buf.processShmRelease();
+        request_buf.detachShm();
         response_buf.freeShm();
     } catch (char const *e) {
         std::cout << e << std::endl;
