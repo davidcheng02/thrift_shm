@@ -1,12 +1,23 @@
 make
 
-echo "Shm Results" >> output.txt
+echo "Shm Results" > output.txt
 echo "====" >> output.txt
 for i in {1..10}
 do
     echo "Run $i" >> output.txt
     ./server &
     ./client >> output.txt &
+    wait
+    echo >> output.txt
+done
+
+echo "Shm No Serialization Results" >> output.txt
+echo "====" >> output.txt
+for i in {1..10}
+do
+    echo "Run $i" >> output.txt
+    ./server --no-serialization &
+    ./client --no-serialization >> output.txt &
     wait
     echo >> output.txt
 done

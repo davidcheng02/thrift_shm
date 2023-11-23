@@ -11,6 +11,7 @@
 
 #include <iostream>
 #include <signal.h>
+#include <sstream>
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
@@ -19,7 +20,20 @@ using namespace ::apache::thrift::server;
 
 #define NUMRUNS 100000
 
+std::string repeat(int n, std::string s) {
+    std::ostringstream os;
+    for(int i = 0; i < n; i++)
+        os << s;
+    return os.str();
+}
+
 int main(int argc, char **argv) {
+    bool serialize = true;
+
+    if (argc > 1 && strcmp(argv[1], "--no-serialize")) {
+        serialize = false;
+    }
+
     std::shared_ptr<TMemoryBuffer> transport(new TMemoryBuffer(SHMSZ));
     std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
     uint8_t *pbuf = (uint8_t *) malloc(sizeof *pbuf * SHMSZ);
@@ -29,32 +43,43 @@ int main(int argc, char **argv) {
         Buffer response_buf = Buffer(true, 2, 2);
 
         while (true) {
-            // do server work on shmem
-            // shm will contain serialized data of message
+            // do server work on shm
+            // shm will contain message
             char *shm = request_buf.processShm();
             memcpy(pbuf, shm, SHMSZ);
-//            std::cout << "Copied shmem to pbuf" << std::endl;
-            // deserialize data
-            transport->write(pbuf, SHMSZ);
+
             std::string msg;
-            protocol->readString(msg);
-            // necessary for restarting rBase and wBase, so that protocol reads
-            // and writes start from beginning every time
-            transport->resetBuffer();
+            if (serialize) {
+                // deserialize data
+                transport->write(pbuf, SHMSZ);
+                protocol->readString(msg);
+                // necessary for restarting rBase and wBase, so that protocol reads
+                // and writes start from beginning every time
+                transport->resetBuffer();
+            } else {
+                msg = (char*) pbuf;
+            }
 
             request_buf.processShmRelease();
 
             // send response to client
-            uint8_t *transport_buf;
-            uint32_t transport_buf_sz;
-            std::string response = "Hello, " + msg;
-            protocol->writeString(response);
-            // now pbuf points to TMemoryBuffer's memory
-            transport->getBuffer(&transport_buf, &transport_buf_sz);
-            transport->resetBuffer();
-
             shm = response_buf.putShm();
-            memcpy(shm, transport_buf, SHMSZ);
+            // uncomment if want to test larger strings
+//            std::string response = repeat(10, "Hello, " + msg);
+            std::string response = "Hello, " + msg;
+
+            if (serialize) {
+                uint8_t *transport_buf;
+                uint32_t transport_buf_sz;
+                protocol->writeString(response);
+                // now transport_buf points to TMemoryBuffer's memory
+                transport->getBuffer(&transport_buf, &transport_buf_sz);
+                transport->resetBuffer();
+
+                memcpy(shm, transport_buf, SHMSZ);
+            } else {
+                memcpy(shm, response.c_str(), SHMSZ);
+            }
 
             response_buf.putShmRelease();
 
@@ -62,6 +87,7 @@ int main(int argc, char **argv) {
             if (msg == "*") {
                 break;
             }
+
         }
 
         // shut down stuff, server responsible for freeing request_buf
