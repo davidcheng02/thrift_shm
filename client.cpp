@@ -28,8 +28,7 @@ std::string repeat(int n, std::string s) {
     return os.str();
 }
 
-void echoMsg(Buffer request_buf,
-             Buffer response_buf,
+void sendMsg(Buffer request_buf,
              std::shared_ptr<TMemoryBuffer> transport,
              std::shared_ptr<TProtocol> protocol,
              uint8_t *pbuf,
@@ -54,9 +53,16 @@ void echoMsg(Buffer request_buf,
     }
 
     request_buf.putShmRelease();
+}
 
+void receiveMsg(Buffer response_buf,
+                std::shared_ptr<TMemoryBuffer> transport,
+                std::shared_ptr<TProtocol> protocol,
+                uint8_t *pbuf,
+                std::string msg,
+                bool serialize) {
     // get response from server and output
-    shm = response_buf.processShm();
+    char *shm = response_buf.processShm();
     std::string response;
 
     memcpy(pbuf, shm, SHMSZ);
@@ -87,7 +93,7 @@ int main(int argc, char **argv) {
 
     try {
         Buffer request_buf = Buffer(true, 1, 1);
-        Buffer response_buf = Buffer(false, 2, 2);
+        Buffer response_buf = Buffer(true, 2, 2);
         // uncomment if want to test larger strings
 //        std::string msg = repeat(10, "World");
         std::string msg = "World";
@@ -95,8 +101,13 @@ int main(int argc, char **argv) {
         auto start = std::chrono::high_resolution_clock::now();
 
         for (int i = 0; i < NUMRUNS; ++i) {
-            echoMsg(request_buf,
-                    response_buf,
+            sendMsg(request_buf,
+                    transport,
+                    protocol,
+                    pbuf,
+                    msg,
+                    serialize);
+            sendMsg(response_buf,
                     transport,
                     protocol,
                     pbuf,
@@ -114,25 +125,25 @@ int main(int argc, char **argv) {
 
         double throughput = NUMRUNS / duration.count();
         us duration_us = std::chrono::duration_cast<us>(duration);
-        double latency = duration_us.count() / NUMRUNS;
+        double latency = (double) duration_us.count() / NUMRUNS;
 
         std::cout << "Throughput: " << throughput << " req/s" << std::endl;
         std::cout << "Latency: " << latency << " us" << std::endl;
         std::cout << "Time: " << duration.count() << " s" << std::endl;
 
         // send shutdown msg to server
-        echoMsg(request_buf,
-                response_buf,
-                transport,
-                protocol,
-                pbuf,
-                "*",
-                serialize);
+        // uncomment if server uses while loop, i.e. handles requests
+        // indefinitely
+//        sendMsg(request_buf,
+//                transport,
+//                protocol,
+//                pbuf,
+//                "*",
+//                serialize);
 
-        // shut down stuff, client responsible for freeing response_buf
         free(pbuf);
         request_buf.detachShm();
-        response_buf.freeShm();
+        response_buf.detachShm();
     } catch (char const *e) {
         std::cout << e << std::endl;
         return 1;

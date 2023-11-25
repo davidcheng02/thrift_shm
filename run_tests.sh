@@ -29,6 +29,7 @@ do
     echo "Run $i" >> output.txt
     ./http_server &
     ./http_client >> output.txt
+    # server will listen indefinitely, so need to manually kill it
     ps -ef | grep "./http_server" | grep -v grep | awk '{print $2}' | xargs kill
     wait
     echo >> output.txt

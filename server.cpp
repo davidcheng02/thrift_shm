@@ -40,9 +40,12 @@ int main(int argc, char **argv) {
 
     try {
         Buffer request_buf = Buffer(false, 1, 1);
-        Buffer response_buf = Buffer(true, 2, 2);
+        Buffer response_buf = Buffer(false, 2, 2);
 
-        while (true) {
+        // uncomment while loop if you want server to indefinitely service
+        // requests. will also need to uncomment the break string lines below
+//        while (true) {
+        for (int i = 0; i < NUMRUNS; ++i) {
             // do server work on shm
             // shm will contain message
             char *shm = request_buf.processShm();
@@ -61,6 +64,11 @@ int main(int argc, char **argv) {
             }
 
             request_buf.processShmRelease();
+
+            // * is the break string
+//            if (msg == "*") {
+//                break;
+//            }
 
             // send response to client
             shm = response_buf.putShm();
@@ -82,18 +90,11 @@ int main(int argc, char **argv) {
             }
 
             response_buf.putShmRelease();
-
-            // * is the break string
-            if (msg == "*") {
-                break;
-            }
-
         }
 
-        // shut down stuff, server responsible for freeing request_buf
-        response_buf.detachShm();
         free(pbuf);
         request_buf.freeShm();
+        response_buf.freeShm();
     } catch (char const *e) {
         std::cout << e << std::endl;
         return 1;
