@@ -4,7 +4,7 @@ CFLAGS=--std=c++11
 
 THRIFT_FILES= gen-cpp/HelloSvc.cpp
 
-all: client server test http_server http_client
+all: client server test http_server http_client shm_lib_server shm_lib_client
 
 http: http_server http_client
 

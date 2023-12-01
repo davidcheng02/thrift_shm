@@ -87,24 +87,35 @@ int main(int argc, char **argv) {
                              message_size);
         }
 
+        spsc_queue_header* header = get_queue_header(qp->request_shmaddr);
+        int batch_size = header->queue_size;
+        int total_iter = 0;
+
         auto start = std::chrono::high_resolution_clock::now();
 
-        for (int i = 0; i < NUMRUNS; ++i) {
-            sendRequest(transport,
-                        protocol,
-                        pbuf,
-                        message_size,
-                        qp,
-                        "World",
-                        serialize);
-            std::string response = receiveResponse(transport,
-                                           protocol,
-                                           pbuf,
-                                           message_size,
-                                           qp,
-                                           serialize);
-        }
+        while (total_iter < NUMRUNS) {
+            int iter = 0;
+            for (; iter < batch_size && total_iter < NUMRUNS;
+                    ++iter, ++total_iter) {
+                sendRequest(transport,
+                            protocol,
+                            pbuf,
+                            message_size,
+                            qp,
+                            "World",
+                            serialize);
+            }
 
+            for (int i = 0; i < iter; ++i) {
+                std::string response = receiveResponse(transport,
+                                               protocol,
+                                               pbuf,
+                                               message_size,
+                                               qp,
+                                               serialize);
+                assert(response == "Hello, World");
+            }
+        }
         auto stop = std::chrono::high_resolution_clock::now();
 
         typedef std::chrono::milliseconds ms;

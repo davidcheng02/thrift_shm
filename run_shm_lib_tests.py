@@ -74,8 +74,14 @@ print(f"Shm ns time avg: {time_means[1]} s")
 print()
 
 fig, ax = plt.subplots()
-types = ["Shm", "Shm (no serialization)"]
+types = ["shm", "shm (no serialization)"]
 bar_colors = ['tab:red', 'tab:blue']
+
+# manually add HTTP/2 measurements from run_tests.sh
+types = ["HTTP/2"] + types
+bar_colors += ['tab:orange']
+throughput_means = [25380.46] + throughput_means
+throughput_stds = [490.4] + throughput_stds
 
 ax.bar(types,
        throughput_means,
@@ -88,7 +94,7 @@ ax.bar(types,
 
 ax.set_xlabel("Transport Protocol")
 ax.set_ylabel("Throughput (req/s)")
-ax.set_title("Shm Library Throughput Comparison")
+ax.set_title("Shared Memory Library Throughput Comparison")
 
 plt.savefig("shm_lib_throughputs.pdf")
 convert_from_path("shm_lib_throughputs.pdf",

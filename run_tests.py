@@ -83,7 +83,7 @@ print(f"Shm no-serialization time avg: {statistics.fmean(shm_ns_time)} s")
 print()
 
 fig, ax = plt.subplots()
-types = ["HTTP/2", "Shm", "Shm (no serialization)"]
+types = ["HTTP/2", "shm", "shm (no serialization)"]
 counts = [statistics.fmean(http_throughput),
           statistics.fmean(shm_throughput),
           statistics.fmean(shm_ns_throughput)]
@@ -103,7 +103,7 @@ ax.bar(types,
 
 ax.set_xlabel("Transport Protocol")
 ax.set_ylabel("Throughput (req/s)")
-ax.set_title("Throughput Comparison")
+ax.set_title("Shared Memory Buffer Throughput Comparison")
 
 plt.savefig("throughputs.pdf")
 convert_from_path("throughputs.pdf",
