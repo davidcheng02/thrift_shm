@@ -94,7 +94,7 @@ ax.bar(types,
 
 ax.set_xlabel("Transport Protocol")
 ax.set_ylabel("Throughput (req/s)")
-ax.set_title("Shared Memory Library Throughput Comparison")
+ax.set_title("Shared Memory RPC Library Throughput Comparison")
 
 plt.savefig("shm_lib_throughputs.pdf")
 convert_from_path("shm_lib_throughputs.pdf",

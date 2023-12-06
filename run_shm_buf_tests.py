@@ -9,7 +9,7 @@ mpl.rcParams['font.family'] = 'serif'
 mpl.rcParams['font.serif'] = ['Computer Modern']
 mpl.rcParams['text.usetex'] = True
 
-#subprocess.call(['sh', './run_tests.sh'])
+#subprocess.call(['sh', './run_shm_buf_tests.sh'])
 NUM_RUNS = 10
 
 shm_throughput = []
