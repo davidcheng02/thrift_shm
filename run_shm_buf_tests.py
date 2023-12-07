@@ -82,33 +82,34 @@ print(f"Shm time avg: {statistics.fmean(shm_time)} s")
 print(f"Shm no-serialization time avg: {statistics.fmean(shm_ns_time)} s")
 print()
 
-fig, ax = plt.subplots()
-types = ["HTTP/2", "shm", "shm (no serialization)"]
-counts = [statistics.fmean(http_throughput),
-          statistics.fmean(shm_throughput),
-          statistics.fmean(shm_ns_throughput)]
-stds = [statistics.stdev(http_throughput),
-        statistics.stdev(shm_throughput),
-        statistics.stdev(shm_ns_throughput)]
-bar_colors = ['tab:red', 'tab:blue', 'tab:orange']
-
-ax.bar(types,
-       counts,
-       yerr=stds,
-       color=bar_colors,
-       align="center",
-       alpha=0.5,
-       ecolor="black",
-       capsize=10)
-
-ax.set_xlabel("Transport Protocol")
-ax.set_ylabel("Throughput (req/s)")
-ax.set_title("Shared Memory Buffer Throughput Comparison")
-
-plt.savefig("throughputs.pdf")
-convert_from_path("throughputs.pdf",
-                  dpi=1200,
-                  output_folder=".",
-                  fmt="png",
-                  output_file="throughputs")
-plt.show()
+# UNCOMMENT FOR GRAPH GENERATION. REQUIRES LATEX TO BE INSTALLED
+#fig, ax = plt.subplots()
+#types = ["HTTP/2", "shm", "shm (no serialization)"]
+#counts = [statistics.fmean(http_throughput),
+#          statistics.fmean(shm_throughput),
+#          statistics.fmean(shm_ns_throughput)]
+#stds = [statistics.stdev(http_throughput),
+#        statistics.stdev(shm_throughput),
+#        statistics.stdev(shm_ns_throughput)]
+#bar_colors = ['tab:red', 'tab:blue', 'tab:orange']
+#
+#ax.bar(types,
+#       counts,
+#       yerr=stds,
+#       color=bar_colors,
+#       align="center",
+#       alpha=0.5,
+#       ecolor="black",
+#       capsize=10)
+#
+#ax.set_xlabel("Transport Protocol")
+#ax.set_ylabel("Throughput (req/s)")
+#ax.set_title("Shared Memory Buffer Throughput Comparison")
+#
+#plt.savefig("throughputs.pdf")
+#convert_from_path("throughputs.pdf",
+#                  dpi=1200,
+#                  output_folder=".",
+#                  fmt="png",
+#                  output_file="throughputs")
+#plt.show()

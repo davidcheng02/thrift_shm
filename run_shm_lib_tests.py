@@ -73,33 +73,35 @@ print(f"Shm time avg: {time_means[0]} s")
 print(f"Shm ns time avg: {time_means[1]} s")
 print()
 
-fig, ax = plt.subplots()
-types = ["shm", "shm (no serialization)"]
-bar_colors = ['tab:red', 'tab:blue']
-
-# manually add HTTP/2 measurements from run_tests.sh
-types = ["HTTP/2"] + types
-bar_colors += ['tab:orange']
-throughput_means = [25380.46] + throughput_means
-throughput_stds = [490.4] + throughput_stds
-
-ax.bar(types,
-       throughput_means,
-       yerr=throughput_stds,
-       color=bar_colors,
-       align="center",
-       alpha=0.5,
-       ecolor="black",
-       capsize=10)
-
-ax.set_xlabel("Transport Protocol")
-ax.set_ylabel("Throughput (req/s)")
-ax.set_title("Shared Memory RPC Library Throughput Comparison")
-
-plt.savefig("shm_lib_throughputs.pdf")
-convert_from_path("shm_lib_throughputs.pdf",
-                  dpi=1200,
-                  output_folder=".",
-                  fmt="png",
-                  output_file="shm_lib_throughputs")
-plt.show()
+# UNCOMMENT FOR GRAPH GENERATION. REQUIRES LATEX TO BE INSTALLED.
+#fig, ax = plt.subplots()
+#types = ["shm", "shm (no serialization)"]
+#bar_colors = ['tab:red', 'tab:blue']
+#
+## manually add HTTP/2 measurements from run_tests.sh
+#types = ["HTTP/2"] + types
+#bar_colors += ['tab:orange']
+## http measurements taken from run_shm_buf_tests.sh output for comparison
+#throughput_means = [25380.46] + throughput_means
+#throughput_stds = [490.4] + throughput_stds
+#
+#ax.bar(types,
+#       throughput_means,
+#       yerr=throughput_stds,
+#       color=bar_colors,
+#       align="center",
+#       alpha=0.5,
+#       ecolor="black",
+#       capsize=10)
+#
+#ax.set_xlabel("Transport Protocol")
+#ax.set_ylabel("Throughput (req/s)")
+#ax.set_title("Shared Memory RPC Library Throughput Comparison")
+#
+#plt.savefig("shm_lib_throughputs.pdf")
+#convert_from_path("shm_lib_throughputs.pdf",
+#                  dpi=1200,
+#                  output_folder=".",
+#                  fmt="png",
+#                  output_file="shm_lib_throughputs")
+#plt.show()
