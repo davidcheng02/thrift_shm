@@ -1,7 +1,12 @@
 # thrift_shm
+## Requirements
+- Apache Thrift
+- C++11
+
 ## Initialization
 Run `thrift -r --gen cpp echo.thrift` to generate the corresponding Thrift
 files before building any of the programs.
+
 ## Benchmarks
 ### Shared memory buffer with semaphores
 Run `sh run_shm_buf_tests.sh` to generate
